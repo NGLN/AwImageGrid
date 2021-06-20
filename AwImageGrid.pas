@@ -6,7 +6,7 @@ interface
 
 uses
   Windows, Classes, SysUtils, Messages, Controls, Graphics, Forms, StdCtrls,
-  Grids, GDIPAPI, GDIPOBJ, RTLConsts, Math, Themes
+  Grids, GDIPAPI, GDIPOBJ, RTLConsts, Math, Themes, Types
   {$IFDEF USE_GR32}, GR32, GR32_Resamplers {$ENDIF};
 
 const
@@ -27,8 +27,7 @@ type
     FThumb: TBitmap;
   end;
 
-  PImageGridItemList = ^TImageGridItemList;
-  TImageGridItemList = array[0..MaxListSize div 2] of TImageGridItem;
+  TImageGridItemList = array of TImageGridItem;
 
 { TImageGridItems
   The managing object for holding filename-thumbnail or image-thumbnail
@@ -41,7 +40,7 @@ type
     FCapacity: Integer;
     FChanged: Boolean;
     FCount: Integer;
-    FList: PImageGridItemList;
+    FList: TImageGridItemList;
     FOnChanged: TNotifyEvent;
     FOnChanging: TNotifyEvent;
     FOwnsObjects: Boolean;
@@ -508,7 +507,7 @@ begin
     try
       for I := 0 to Strings.Count - 1 do
       begin
-        Item := TImageGridItems(Strings).FList^[I];
+        Item := TImageGridItems(Strings).FList[I];
         AddItem(Item.FFileName, Item.FObject, Item.FImage, Item.FThumb);
       end;
     finally
@@ -565,12 +564,15 @@ begin
   if FCount <> 0 then
   begin
     Changing;
-    for I := 0 to FCount - 1 do
-      FList^[I].FThumb.Free;
     if FOwnsObjects then
       for I := 0 to FCount - 1 do
-        FList^[I].FObject.Free;
-    Finalize(FList^[0], FCount);
+      begin
+        FList[I].FThumb.Free;
+        FList[I].FObject.Free;
+      end
+    else
+      for I := 0 to FCount - 1 do
+        FList[I].FThumb.Free;
     FCount := 0;
     SetCapacity(0);
     Changed;
@@ -583,7 +585,7 @@ var
 begin
   BeginUpdate;
   for I := 0 to FCount - 1 do
-    FreeAndNil(FList^[I].FThumb);
+    FreeAndNil(FList[I].FThumb);
   EndUpdate;
 end;
 
@@ -597,14 +599,20 @@ begin
   if (Index < 0) or (Index >= FCount) then
     Error(@SListIndexError, Index);
   Changing;
-  FList^[Index].FThumb.Free;
+  FList[Index].FThumb.Free;
   if FOwnsObjects then
-    FList^[Index].FObject.Free;
-  Finalize(FList^[Index]);
+    FList[Index].FObject.Free;
+  Finalize(FList[Index]);
   Dec(FCount);
   if Index < FCount then
-    System.Move(FList^[Index + 1], FList^[Index],
+  begin
+    System.Move(FList[Index + 1], FList[Index],
       (FCount - Index) * SizeOf(TImageGridItem));
+    PPointer(@FList[FCount].FFileName)^ := nil;
+    PPointer(@FList[FCount].FImage)^ := nil;
+    PPointer(@FList[FCount].FObject)^ := nil;
+    PPointer(@FList[FCount].FThumb)^ := nil;
+  end;
   Changed;
 end;
 
@@ -618,9 +626,9 @@ end;
 
 procedure TImageGridItems.Exchange(Index1, Index2: Integer);
 begin
-  if (Index1 < 0) or (Index1 >= FCount) then
+  if Cardinal(Index1) >= Cardinal(FCount) then
     Error(@SListIndexError, Index1);
-  if (Index2 < 0) or (Index2 >= FCount) then
+  if Cardinal(Index2) >= Cardinal(FCount) then
     Error(@SListIndexError, Index2);
   Changing;
   ExchangeItems(Index1, Index2);
@@ -629,21 +637,21 @@ end;
 
 procedure TImageGridItems.ExchangeItems(Index1, Index2: Integer);
 var
-  Temp: Integer;
+  Temp: Pointer;
   Item1: PImageGridItem;
   Item2: PImageGridItem;
 begin
-  Item1 := @FList^[Index1];
-  Item2 := @FList^[Index2];
-  Temp := Integer(Item1^.FFileName);
-  Integer(Item1^.FFileName) := Integer(Item2^.FFileName);
-  Integer(Item2^.FFileName) := Temp;
-  Temp := Integer(Item1^.FObject);
-  Integer(Item1^.FObject) := Integer(Item2^.FObject);
-  Integer(Item2^.FObject) := Temp;
-  Temp := Integer(Item1^.FThumb);
-  Integer(Item1^.FThumb) := Integer(Item2^.FThumb);
-  Integer(Item2^.FThumb) := Temp;
+  Item1 := @FList[Index1];
+  Item2 := @FList[Index2];
+  Temp := Pointer(Item1.FFileName);
+  Pointer(Item1.FFileName) := Pointer(Item2.FFileName);
+  Pointer(Item2.FFileName) := Temp;
+  Temp := Pointer(Item1.FObject);
+  Pointer(Item1.FObject) := Pointer(Item2.FObject);
+  Pointer(Item2.FObject) := Temp;
+  Temp := Pointer(Item1.FThumb);
+  Pointer(Item1.FThumb) := Pointer(Item2.FThumb);
+  Pointer(Item2.FThumb) := Temp;
 end;
 
 function TImageGridItems.Find(const S: String; var Index: Integer): Boolean;
@@ -659,7 +667,7 @@ begin
   while L <= H do
   begin
     I := (L + H) shr 1;
-    C := CompareStrings(FList^[I].FFileName, S);
+    C := CompareStrings(FList[I].FFileName, S);
     if C < 0 then
       L := I + 1
     else
@@ -674,9 +682,9 @@ end;
 
 function TImageGridItems.Get(Index: Integer): String;
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  Result := FList^[Index].FFileName;
+  Result := FList[Index].FFileName;
 end;
 
 function TImageGridItems.GetCapacity: Integer;
@@ -691,36 +699,28 @@ end;
 
 function TImageGridItems.GetImage(Index: Integer): TGraphic;
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  Result := FList^[Index].FImage;
+  Result := FList[Index].FImage;
 end;
 
 function TImageGridItems.GetObject(Index: Integer): TObject;
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  Result := FList^[Index].FObject;
+  Result := FList[Index].FObject;
 end;
 
 function TImageGridItems.GetThumb(Index: Integer): TBitmap;
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  Result := FList^[Index].FThumb;
+  Result := FList[Index].FThumb;
 end;
 
 procedure TImageGridItems.Grow;
-var
-  Delta: Integer;
 begin
-  if FCapacity > 64 then
-    Delta := FCapacity div 4
-  else if FCapacity > 8 then
-    Delta := 16
-  else
-    Delta := 4;
-  SetCapacity(FCapacity + Delta);
+  SetCapacity(GrowCollection(FCapacity, FCount + 1));
 end;
 
 function TImageGridItems.IndexOf(const S: String): Integer;
@@ -744,13 +744,13 @@ begin
   if FCount = FCapacity then
     Grow;
   if Index < FCount then
-    System.Move(FList^[Index], FList^[Index + 1],
+    System.Move(FList[Index], FList[Index + 1],
       (FCount - Index) * SizeOf(TImageGridItem));
-  Pointer(FList^[Index].FFileName) := nil;
-  FList^[Index].FFileName := S;
-  FList^[Index].FObject := AObject;
-  FList^[Index].FImage := AImage;
-  FList^[Index].FThumb := AThumb;
+  Pointer(FList[Index].FFileName) := nil;
+  FList[Index].FFileName := S;
+  FList[Index].FObject := AObject;
+  FList[Index].FImage := AImage;
+  FList[Index].FThumb := AThumb;
   Inc(FCount);
   Changed;
 end;
@@ -769,59 +769,59 @@ procedure TImageGridItems.Put(Index: Integer; const S: String);
 begin
   if FSorted then
     Error(@SSortedListError, 0);
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  if FList^[Index].FFileName <> S then
+  if FList[Index].FFileName <> S then
   begin
     Changing;
-    if FList^[Index].FImage = nil then
-      FreeAndNil(FList^[Index].FThumb);
-    FList^[Index].FFileName := S;
+    if FList[Index].FImage = nil then
+      FreeAndNil(FList[Index].FThumb);
+    FList[Index].FFileName := S;
     Changed;
   end;
 end;
 
 procedure TImageGridItems.PutImage(Index: Integer; AImage: TGraphic);
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  if Flist^[Index].FImage <> AImage then
+  if Flist[Index].FImage <> AImage then
   begin
     Changing;
-    FList^[Index].FImage := AImage;
-    FreeAndNil(FList^[Index].FThumb);
+    FList[Index].FImage := AImage;
+    FreeAndNil(FList[Index].FThumb);
     Changed;
   end;
 end;
 
 procedure TImageGridItems.PutObject(Index: Integer; AObject: TObject);
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  if FList^[Index].FObject <> AObject then
+  if FList[Index].FObject <> AObject then
   begin
     Changing;
-    FList^[Index].FObject := AObject;
+    FList[Index].FObject := AObject;
     Changed;
   end;
 end;
 
 procedure TImageGridItems.PutThumb(Index: Integer; AThumb: TBitmap);
 begin
-  if (Index < 0) or (Index >= FCount) then
+  if Cardinal(Index) >= Cardinal(FCount) then
     Error(@SListIndexError, Index);
-  if FList^[Index].FThumb <> AThumb then
+  if FList[Index].FThumb <> AThumb then
   begin
     Changing;
-    FList^[Index].FThumb := AThumb;
+    FList[Index].FThumb := AThumb;
     Changed;
   end;
 end;
 
 procedure TImageGridItems.PutThumbSilently(Index: Integer; AThumb: TBitmap);
 begin
-  if (Index >= 0) and (Index < FCount) then
-    FList^[Index].FThumb := AThumb;
+  if Cardinal(Index) < Cardinal(FCount) then
+    FList[Index].FThumb := AThumb;
 end;
 
 procedure TImageGridItems.QuickSort(L, R: Integer);
@@ -835,9 +835,9 @@ begin
     J := R;
     P := (L + R) shr 1;
     repeat
-      while CompareStrings(FList^[I].FFileName, FList^[P].FFileName) < 0 do
+      while CompareStrings(FList[I].FFileName, FList[P].FFileName) < 0 do
         Inc(I);
-      while CompareStrings(FList^[J].FFileName, FList^[P].FFileName) > 0 do
+      while CompareStrings(FList[J].FFileName, FList[P].FFileName) > 0 do
         Dec(J);
       if I <= J then
       begin
@@ -858,9 +858,11 @@ end;
 
 procedure TImageGridItems.SetCapacity(Value: Integer);
 begin
+  if Value < FCount then
+    Error(@SListCapacityError, Value);
   if FCapacity <> Value then
   begin
-    ReallocMem(FList, Value * SizeOf(TImageGridItem));
+    SetLength(FList, Value);
     FCapacity := Value;
   end;
 end;
@@ -1814,7 +1816,7 @@ var
   ThumbHeight: Integer;
 begin
   DrawParentBackGround := ParentBackground and (Parent <> nil) and
-    ThemeServices.ThemesEnabled;
+    StyleServices.Enabled;
   Canvas.Brush.Color := Color;
   Canvas.Brush.Style := bsSolid;
   if FMarkerStyle = psClear then
@@ -1871,7 +1873,7 @@ begin
           ExcludeClipRect(Canvas.Handle, R.Left + Offset.X, R.Top + Offset.Y,
             R.Left + Offset.X + ThumbWidth, R.Top + Offset.Y + ThumbHeight);
           if DrawParentBackGround then
-            ThemeServices.DrawParentBackground(Handle, Canvas.Handle, nil,
+            StyleServices.DrawParentBackground(Handle, Canvas.Handle, nil,
               False, @R)
           else
             Canvas.FillRect(R);
@@ -1891,7 +1893,7 @@ begin
   if DrawParentBackground then
   begin
     R := Canvas.ClipRect;
-    ThemeServices.DrawParentBackground(Handle, Canvas.Handle, nil, False, @R);
+    StyleServices.DrawParentBackground(Handle, Canvas.Handle, nil, False, @R);
   end
   else
     Canvas.FillRect(Canvas.ClipRect);
@@ -2202,7 +2204,7 @@ begin
       TerminateThumbsGenerator;
     FThumbsGenerator := TThumbsGenerator.Create(Self, True);
     FThumbsGenerator.OnTerminate := ThumbsUpdated;
-    FThumbsGenerator.Resume;
+    FThumbsGenerator.Start;
   end;
 end;
 
