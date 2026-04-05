@@ -1,5 +1,11 @@
 # AwImageGrid
 
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Introduction
+
 See:
 https://stackoverflow.com/a/8954813/757830
 
@@ -9,7 +15,7 @@ It has only a vertical scroll bar; resizing the width of the control adjusts the
 
 Because loading and resampling these images may take some time, depending on image count, resolution and whether you want to use the Graphics32 library for better resample quality, the component delegates the loading process to a separate thread, which (re)runs on setting the column width or the row height, and on changing the file names or the folder path in which the component tries to find all images of types to be supplied in the FileFormats property.
 
-# Features:
+## Features
 
 - Creates and resizes image thumbs in a background thread, from file names with the GDI+ library or from manually added images with the Graphics 32 library
 - Automatically recognizes all registered image file formats
@@ -19,7 +25,7 @@ Because loading and resampling these images may take some time, depending on ima
 - OwnerDraw support, e.g. for adding captions to the thumbs
 - Virtual support for bypassing the automatic creation of thumbs
 
-# Properties and events:
+## Properties and events
 
 - `ColCount`: number of columns, readonly
 - `Count`: number of images, readonly
